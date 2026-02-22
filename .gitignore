@@ -46,3 +46,6 @@ next-env.d.ts
 tsender/lib/
 tsender/out/
 tsender/cache/
+tsender/broadcast/
+tsender/.password
+tsender/.env
