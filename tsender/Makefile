@@ -15,3 +15,35 @@ snapshot :; forge snapshot
 format :; forge fmt
 
 anvil :; anvil -m 'test test test test test test test test test test test junk' --steps-tracing --block-time 10
+
+
+install :; forge install OpenZeppelin/openzeppelin-contracts@v5.5.0 && forge install Cyfrin/foundry-devops@0.4.0
+
+# Remove modules
+remove :; rm -rf .gitmodules && rm -rf .git/modules/* && rm -rf lib && touch .gitmodules && git add . && git commit -m "modules"
+
+deploy:
+	@forge script script/DeployAirdrop.s.sol:DeployAirdrop $(NETWORK_ARGS)
+
+NETWORK_ARGS := --rpc-url http://localhost:8545 --private-key $(DEFAULT_ANVIL_KEY) --broadcast
+
+ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
+	NETWORK_ARGS := --rpc-url $(SEPOLIA_RPC_URL) --account $(METAMAST_ACCOUNT) --broadcast --verify --etherscan-api-key $(ETHERSCAN_API_KEY) -vvvv
+endif
+
+deploy-sepolia:
+	@forge script script/DeployAirdrop.s.sol:DeployAirdrop \
+		--rpc-url $(SEPOLIA_RPC_URL) \
+		--account $(METAMAST_ACCOUNT) \
+		--broadcast --verify \
+		--etherscan-api-key $(ETHERSCAN_API_KEY) \
+		-vvvv
+
+wallets:; cast wallet list
+# Import a wallet by name + private key
+import-wallet:
+	@if [ -z "$(WALLET_NAME)" ]; then \
+		echo "Usage: make import-wallet WALLET_NAME=<name> "; \
+		exit 1; \
+	fi
+	@cast wallet import $(WALLET_NAME) --interactive

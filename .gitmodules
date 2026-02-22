@@ -1,0 +1,6 @@
+[submodule "tsender/lib/openzeppelin-contracts"]
+	path = tsender/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "tsender/lib/foundry-devops"]
+	path = tsender/lib/foundry-devops
+	url = https://github.com/Cyfrin/foundry-devops
