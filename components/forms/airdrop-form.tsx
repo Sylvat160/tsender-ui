@@ -4,13 +4,15 @@ import { useAirdropForm } from "@/hooks/use-airdrop-form";
 import { FormGenerator } from "../form-generator";
 import { FieldConfig } from "@/types";
 import { AirdropSchema } from "@/schemas/airdrop.schema";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useStore } from "@tanstack/react-store";
 import { CardContent, CardHeader, CardTitle, Card } from "../ui/card";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { Button } from "../ui/button";
-import { useChainId, useReadContract, useConfig, useAccount } from "wagmi";
-import { chainsToSender, erc20Abi } from "@/constants";
-import { readContract } from "@wagmi/core";
+import { useChainId, useReadContracts, useConfig, useAccount } from "wagmi";
+import { chainsToSender, erc20Abi, tsenderAbi } from "@/constants";
+import { readContract, writeContract, waitForTransactionReceipt } from "@wagmi/core";
+import { parseAmounts, parseRecipients } from "@/utils";
 
 const AIRDROP_FORM_FIELDS: FieldConfig<AirdropSchema>[] = [
   {
@@ -35,18 +37,17 @@ const AIRDROP_FORM_FIELDS: FieldConfig<AirdropSchema>[] = [
 
 const AirdropForm = () => {
   const [isUnsafeMode, setIsUnsafeMode] = useState(false);
-  const [tokenAddress, setTokenAddress] = useState<string>("");
-  const [amount, setAmount] = useState<number>(0);
   const chainId = useChainId();
   const config = useConfig();
   const account = useAccount();
 
   async function getApprovedAmount(
     tsenderAddress: string | null,
-  ): Promise<number> {
+    tokenAddress: string,
+  ): Promise<bigint> {
     if (!tsenderAddress) {
       alert("No Tsender address found, please use a supported network");
-      return 0;
+      return 0n;
     }
     // read from the chain (allowance)
     const res = await readContract(config, {
@@ -56,19 +57,87 @@ const AirdropForm = () => {
       args: [account.address, tsenderAddress as `0x${string}`],
     });
     // like calling token.allowance(account.address, tsenderAddress)
-    return res as number;
+    return res as bigint;
   }
 
   const { form } = useAirdropForm(async (values) => {
+    console.log("submit called", { chainId, values });
     // Handle form submission logic here (blockchain logic)
-    console.log({ ...values, isUnsafeMode, chainId });
     // 1. we need to approve tsender contract to send out tokens
     // 1a. if already approved move to step 2
     // 2. call the airdrop function on tsender contract
     // 3. wait transaction to be mined
+    if (!chainsToSender[chainId]) {
+      alert("Unsupported network");
+      return;
+    }
+
     const tsenderAddress = chainsToSender[chainId]["tsender"];
-    const approvedAmount = await getApprovedAmount(tsenderAddress);
+    const approvedAmount = await getApprovedAmount(
+      tsenderAddress,
+      values.tokenAddress,
+    );
+    console.log({ ...values, isUnsafeMode, chainId, approvedAmount });
+    const recipientList = parseRecipients(values.recipients);
+    const amountList = parseAmounts(values.amounts);
+    const totalAmount = amountList.reduce((sum, a) => sum + a, 0n);
+
+    if (approvedAmount < totalAmount) {
+      const approveTxHash = await writeContract(config, {
+        abi: erc20Abi,
+        address: values.tokenAddress as `0x${string}`,
+        functionName: "approve",
+        args: [tsenderAddress as `0x${string}`, totalAmount],
+      });
+      await waitForTransactionReceipt(config, { hash: approveTxHash });
+    }
+
+    await writeContract(config, {
+      abi: tsenderAbi,
+      address: tsenderAddress as `0x${string}`,
+      functionName: "airdropERC20",
+      args: [values.tokenAddress as `0x${string}`, recipientList, amountList, totalAmount],
+    });
   });
+
+  // Reactively read form field values
+  const tokenAddress = useStore(form.store, (s) => s.values.tokenAddress);
+  const amountsRaw = useStore(form.store, (s) => s.values.amounts);
+
+  // Only query the chain when we have a valid-looking address
+  const isValidAddress = /^0x[0-9a-fA-F]{40}$/.test(tokenAddress);
+
+  const { data: tokenData } = useReadContracts({
+    contracts: [
+      {
+        abi: erc20Abi,
+        address: tokenAddress as `0x${string}`,
+        functionName: "decimals",
+      },
+      {
+        abi: erc20Abi,
+        address: tokenAddress as `0x${string}`,
+        functionName: "name",
+      },
+    ],
+    query: { enabled: isValidAddress },
+  });
+
+  const decimals = tokenData?.[0]?.result as number | undefined;
+  const tokenName = tokenData?.[1]?.result as string | undefined;
+
+  const totalWei = useMemo(() => {
+    try {
+      return parseAmounts(amountsRaw).reduce((sum, a) => sum + a, 0n);
+    } catch {
+      return 0n;
+    }
+  }, [amountsRaw]);
+
+  const totalTokens =
+    decimals !== undefined && totalWei > 0n
+      ? (Number(totalWei) / 10 ** decimals).toString()
+      : undefined;
 
   return (
     <div className="flex justify-center px-a py-10">
@@ -120,19 +189,21 @@ const AirdropForm = () => {
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-zinc-600">Token Name:</span>
                   <span className="font-mono text-zinc-900">
-                    {/*{tokenData?.[1]?.result as string}*/}
+                    {tokenName ?? "—"}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-zinc-600">Amount (wei):</span>
-                  <span className="font-mono text-zinc-900">{amount}</span>
+                  <span className="font-mono text-zinc-900">
+                    {totalWei > 0n ? totalWei.toString() : "—"}
+                  </span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-zinc-600">
                     Amount (tokens):
                   </span>
                   <span className="font-mono text-zinc-900">
-                    {/*{formatTokenAmount(total, tokenData?.[0]?.result as number)}*/}
+                    {totalTokens ?? "—"}
                   </span>
                 </div>
               </div>

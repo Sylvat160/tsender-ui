@@ -12,6 +12,7 @@ export function useAirdropForm(
     },
     schema: airdropSchema,
     onSubmit,
+    onSuccess: () => form.reset(),
   });
 
   return {
