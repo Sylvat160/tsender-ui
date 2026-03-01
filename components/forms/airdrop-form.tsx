@@ -4,15 +4,24 @@ import { useAirdropForm } from "@/hooks/use-airdrop-form";
 import { FormGenerator } from "../form-generator";
 import { FieldConfig } from "@/types";
 import { AirdropSchema } from "@/schemas/airdrop.schema";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useStore } from "@tanstack/react-store";
 import { CardContent, CardHeader, CardTitle, Card } from "../ui/card";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { Button } from "../ui/button";
 import { useChainId, useReadContracts, useConfig, useAccount } from "wagmi";
 import { chainsToSender, erc20Abi, tsenderAbi } from "@/constants";
-import { readContract, writeContract, waitForTransactionReceipt } from "@wagmi/core";
+import {
+  readContract,
+  writeContract,
+  waitForTransactionReceipt,
+} from "@wagmi/core";
 import { parseAmounts, parseRecipients } from "@/utils";
+import { toast } from "sonner";
+import { CSpinner } from "../customs";
+import { formatEther } from "viem";
+
+const FORM_STORAGE_KEY = "tsender-airdrop-form";
 
 const AIRDROP_FORM_FIELDS: FieldConfig<AirdropSchema>[] = [
   {
@@ -46,7 +55,7 @@ const AirdropForm = () => {
     tokenAddress: string,
   ): Promise<bigint> {
     if (!tsenderAddress) {
-      alert("No Tsender address found, please use a supported network");
+      toast.warning("No Tsender address found, please use a supported network");
       return 0n;
     }
     // read from the chain (allowance)
@@ -68,41 +77,73 @@ const AirdropForm = () => {
     // 2. call the airdrop function on tsender contract
     // 3. wait transaction to be mined
     if (!chainsToSender[chainId]) {
-      alert("Unsupported network");
+      toast.error("Unsupported network");
       return;
     }
 
-    const tsenderAddress = chainsToSender[chainId]["tsender"];
-    const approvedAmount = await getApprovedAmount(
-      tsenderAddress,
-      values.tokenAddress,
-    );
-    console.log({ ...values, isUnsafeMode, chainId, approvedAmount });
-    const recipientList = parseRecipients(values.recipients);
-    const amountList = parseAmounts(values.amounts);
-    const totalAmount = amountList.reduce((sum, a) => sum + a, 0n);
+    try {
+      const tsenderAddress = chainsToSender[chainId]["tsender"];
+      const approvedAmount = await getApprovedAmount(
+        tsenderAddress,
+        values.tokenAddress,
+      );
+      console.log({ ...values, isUnsafeMode, chainId, approvedAmount });
+      const recipientList = parseRecipients(values.recipients);
+      const amountList = parseAmounts(values.amounts);
+      const totalAmount = amountList.reduce((sum, a) => sum + a, 0n);
+      if (approvedAmount < totalAmount) {
+        const approveTxHash = await writeContract(config, {
+          abi: erc20Abi,
+          address: values.tokenAddress as `0x${string}`,
+          functionName: "approve",
+          args: [tsenderAddress as `0x${string}`, totalAmount],
+        });
+        await waitForTransactionReceipt(config, { hash: approveTxHash });
+      }
 
-    if (approvedAmount < totalAmount) {
-      const approveTxHash = await writeContract(config, {
-        abi: erc20Abi,
-        address: values.tokenAddress as `0x${string}`,
-        functionName: "approve",
-        args: [tsenderAddress as `0x${string}`, totalAmount],
+      await writeContract(config, {
+        abi: tsenderAbi,
+        address: tsenderAddress as `0x${string}`,
+        functionName: "airdropERC20",
+        args: [
+          values.tokenAddress as `0x${string}`,
+          recipientList,
+          amountList,
+          totalAmount,
+        ],
       });
-      await waitForTransactionReceipt(config, { hash: approveTxHash });
+      toast.success("Airdrop successful!");
+      localStorage.removeItem(FORM_STORAGE_KEY);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      toast.error(`Airdrop failed: ${message}`);
+      throw error;
     }
-
-    await writeContract(config, {
-      abi: tsenderAbi,
-      address: tsenderAddress as `0x${string}`,
-      functionName: "airdropERC20",
-      args: [values.tokenAddress as `0x${string}`, recipientList, amountList, totalAmount],
-    });
   });
+
+  useEffect(() => {
+    const saved = localStorage.getItem(FORM_STORAGE_KEY);
+    if (!saved) return;
+    const parsed = JSON.parse(saved);
+    form.setFieldValue("tokenAddress", parsed.tokenAddress ?? "");
+    form.setFieldValue("amounts", parsed.amounts ?? "");
+    form.setFieldValue("recipients", parsed.recipients ?? "");
+  }, []);
+
+  useEffect(() => {
+    return form.store.subscribe(() => {
+      localStorage.setItem(
+        FORM_STORAGE_KEY,
+        JSON.stringify(form.store.state.values),
+      );
+    });
+  }, []);
 
   // Reactively read form field values
   const tokenAddress = useStore(form.store, (s) => s.values.tokenAddress);
   const amountsRaw = useStore(form.store, (s) => s.values.amounts);
+  const recipientsRaw = useStore(form.store, (s) => s.values.recipients);
+  const recipientCount = parseRecipients(recipientsRaw).length;
 
   // Only query the chain when we have a valid-looking address
   const isValidAddress = /^0x[0-9a-fA-F]{40}$/.test(tokenAddress);
@@ -211,21 +252,25 @@ const AirdropForm = () => {
 
             <form.Subscribe selector={(s) => [s.canSubmit, s.isSubmitting]}>
               {([canSubmit, isSubmitting]) => (
-                <Button
-                  type="submit"
-                  disabled={!canSubmit || isSubmitting}
-                  className={`w-full py-3 rounded-lg text-white font-semibold transition-colors ${
-                    isUnsafeMode
-                      ? "bg-red-500 hover:bg-red-600"
-                      : "bg-blue-500 hover:bg-blue-600"
-                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {isSubmitting
-                    ? "Sending..."
-                    : isUnsafeMode
-                      ? "Send Tokens (Unsafe)"
-                      : "Send Tokens"}
-                </Button>
+                <>
+                  {isSubmitting && (
+                    <CSpinner
+                      message={`Sending ${tokenName ?? "tokens"} to ${recipientCount} recipients`}
+                      endLabel={`${formatEther(totalWei)} ETH`}
+                    />
+                  )}
+                  <Button
+                    type="submit"
+                    disabled={!canSubmit || isSubmitting}
+                    className={`w-full py-3 rounded-lg text-white font-semibold transition-colors ${
+                      isUnsafeMode
+                        ? "bg-red-500 hover:bg-red-600"
+                        : "bg-blue-500 hover:bg-blue-600"
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {isUnsafeMode ? "Send Tokens (Unsafe)" : "Send Tokens"}
+                  </Button>
+                </>
               )}
             </form.Subscribe>
           </form>

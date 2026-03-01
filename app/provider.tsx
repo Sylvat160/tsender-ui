@@ -7,6 +7,7 @@ import { mainnet, sepolia, anvil, zksync } from "wagmi/chains";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import { getRainbowTheme } from "@/lib/rainbow-theme";
+import { Toaster } from "sonner";
 
 const config = getDefaultConfig({
   appName: "Tsender",
@@ -26,6 +27,7 @@ export const Provider = ({ children }: { children: React.ReactNode }) => {
           theme={getRainbowTheme(resolvedTheme === "dark" ? "dark" : "light")}
         >
           {children}
+          <Toaster />
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
