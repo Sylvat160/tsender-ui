@@ -14,7 +14,7 @@ import { env } from "@/lib/env";
 
 export default getDefaultConfig({
   appName: "TSender",
-  projectId: env.NEXT_PUBLIC_TSENDER_CONTRACT_ADDRESS,
+  projectId: env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID,
   chains: [mainnet, optimism, arbitrum, base, zksync, sepolia, anvil],
   ssr: false,
 });
