@@ -25,7 +25,7 @@ const Header = () => {
         </a>
       </div>
       <h3 className="italic text-left hidden text-zinc-500 lg:block">
-        The most gas efficient airdrop contract on earth, built in huff 🐎
+        The most gas efficient airdrop contract on earth, built in solidity 🐎
       </h3>
       <div className="flex items-center gap-2.5 md:gap-6">
         <ConnectButton />
