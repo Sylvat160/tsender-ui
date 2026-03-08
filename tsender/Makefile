@@ -1,3 +1,5 @@
+-include .env
+
 .PHONY: all test clean deploy fund help install snapshot format anvil zktest coverage wallets import-wallet
 
 DEFAULT_ANVIL_KEY := 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
@@ -30,6 +32,14 @@ NETWORK_ARGS := --rpc-url http://localhost:8545 --private-key $(DEFAULT_ANVIL_KE
 ifeq ($(findstring --network sepolia,$(ARGS)),--network sepolia)
 	NETWORK_ARGS := --rpc-url $(SEPOLIA_RPC_URL) --account $(METAMAST_ACCOUNT) --broadcast --verify --etherscan-api-key $(ETHERSCAN_API_KEY) -vvvv
 endif
+
+deploy-erc20-sepolia:
+	@forge script script/DeployERC20Mock.s.sol:DeployERC20Mock \
+		--rpc-url $(SEPOLIA_RPC_URL) \
+		--account $(METAMAST_ACCOUNT) \
+		--broadcast --verify \
+		--etherscan-api-key $(ETHERSCAN_API_KEY) \
+		-vvvv
 
 deploy-sepolia:
 	@forge script script/DeployAirdrop.s.sol:DeployAirdrop \

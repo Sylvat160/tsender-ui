@@ -51,3 +51,5 @@ tsender/.password
 tsender/.env
 
 .cache-synpress/
+test-results/
+dist/
