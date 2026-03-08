@@ -47,3 +47,14 @@ import-wallet:
 		exit 1; \
 	fi
 	@cast wallet import $(WALLET_NAME) --interactive
+
+ERC20_ADDRESS := 0x5FbDB2315678afecb367f032d93F642f64180aa3
+
+mint-tokens:
+	@if [ -z "$(RECIPIENT)" ]; then \
+		echo "Usage: make mint-tokens RECIPIENT=<address>"; \
+		exit 1; \
+	fi
+	@cast send $(ERC20_ADDRESS) "mint(address,uint256)" $(RECIPIENT) 1000000000000000000000 \
+		--rpc-url http://localhost:8545 \
+		--private-key $(DEFAULT_ANVIL_KEY)

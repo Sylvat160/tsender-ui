@@ -9,7 +9,7 @@ import { useStore } from "@tanstack/react-store";
 import { CardContent, CardHeader, CardTitle, Card } from "../ui/card";
 import { Tabs, TabsList, TabsTrigger } from "../ui/tabs";
 import { Button } from "../ui/button";
-import { useChainId, useReadContracts, useConfig, useAccount } from "wagmi";
+import { useChainId, useReadContracts, useConfig, useConnection } from "wagmi";
 import { chainsToSender, erc20Abi, tsenderAbi } from "@/constants";
 import {
   readContract,
@@ -48,7 +48,7 @@ const AirdropForm = () => {
   const [isUnsafeMode, setIsUnsafeMode] = useState(false);
   const chainId = useChainId();
   const config = useConfig();
-  const account = useAccount();
+  const account = useConnection();
 
   async function getApprovedAmount(
     tsenderAddress: string | null,

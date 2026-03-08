@@ -13,7 +13,7 @@ const config = getDefaultConfig({
   appName: "Tsender",
   projectId: env.NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID,
   chains: [mainnet, sepolia, anvil, zksync],
-  ssr: false,
+  ssr: true,
 });
 
 const queryClient = new QueryClient();

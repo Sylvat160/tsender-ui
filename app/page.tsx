@@ -1,3 +1,4 @@
+import ConnectGate from "@/components/connect-gate";
 import { AirdropForm } from "@/components/forms/airdrop-form";
 import Header from "@/components/header";
 
@@ -6,8 +7,9 @@ export default function Home() {
     <div>
       <main>
         <Header />
-
-        <AirdropForm />
+        <ConnectGate>
+          <AirdropForm />
+        </ConnectGate>
       </main>
     </div>
   );

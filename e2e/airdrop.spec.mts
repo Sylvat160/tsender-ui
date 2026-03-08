@@ -24,7 +24,7 @@ test("shows airdrop form after connecting wallet", async ({
   const metamask = new MetaMask(
     context,
     metamaskPage,
-    basicSetup.walletPassword,
+    "Tester@1234",
     extensionId,
   );
 
@@ -32,11 +32,8 @@ test("shows airdrop form after connecting wallet", async ({
 
   await page.getByRole("button", { name: /connect wallet/i }).click();
 
-  // Promise.all: click MetaMask option and approve the connection popup simultaneously
-  await Promise.all([
-    page.getByText("MetaMask").click(),
-    metamask.connectToDapp(),
-  ]);
+  await page.getByText("MetaMask").click();
+  await metamask.connectToDapp();
 
   await expect(page.getByText("Token Address")).toBeVisible();
 });

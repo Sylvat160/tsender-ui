@@ -49,3 +49,5 @@ tsender/cache/
 tsender/broadcast/
 tsender/.password
 tsender/.env
+
+.cache-synpress/
